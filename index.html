@@ -4,10 +4,11 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-		<title>reveal.js</title>
+		<title>SQL GROUPING SETS</title>
+        <meta name="description" content="Writing reporting queries can to be easy.">
 
 		<link rel="stylesheet" href="css/reveal.css">
-		<link rel="stylesheet" href="css/theme/black.css">
+		<link rel="stylesheet" href="css/theme/mymoon.css">
 
 		<!-- Theme used for syntax highlighting of code -->
 		<link rel="stylesheet" href="lib/css/zenburn.css">
@@ -24,8 +25,305 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+                <section>
+                    <aside class="notes" data-markdown>
+   My name is David Fetter, and I'll be building on your knowledge of SQL aggregation.  I'll be introducing a powerful feature called GROUPING SETS by developing a report.
+
+   GROUPING SETS is just shorthand for "do all the following aggregations."
+
+   Higher level abstractions like GROUPING SETS make the code short and simple, which means that that the person whose code is broken and causing havoc at 3:30am won't be you.
+                    </aside>
+                    <h3>SQL <b>GROUPING SETS</b></h3>
+                </section>
+                <section>
+                    <img src="http://www.yurtopic.com/health/general/images/speed-up-metabolism/sleeping.jpg" alt="you, fast asleep">
+                </section>
+                <section>
+                    <aside class="notes" data-markdown>
+This is what we'll build up to, but
+                    </aside>
+                    <pre><code data-trim data-noescape>
+SELECT
+    to_char(
+        date_trunc('month', payment_date),
+        'Month YYYY'
+    ) AS "Month",
+    format('%s %s', s.first_name, s.last_name) AS "Staff",
+    sum(amount) AS "Amount"
+FROM
+    payment p
+JOIN
+    staff s
+    ON (p.staff_id = s.staff_id)
+GROUP BY GROUPING SETS (
+    ( date_trunc('month', payment_date), (s.last_name, s.first_name) ), 
+    ( date_trunc('month', payment_date),                             ), 
+    (                                    (s.last_name, s.first_name) ), 
+    (                                                                )
+)
+ORDER BY
+    date_trunc('month', payment_date),
+    (s.last_name, s.first_name);
+                    </code></pre>
+                </section>
+                <section>
+                    <img src="https://i.pinimg.com/736x/c1/3c/4f/c13c4f0a5a6262b6f64c2ba65b00f830--friendly-letter-douglas-adams.jpg" alt="Don't panic!">
+                </section>
+                <section>
+                    <aside class="notes" data-markdown>
+   We'll start from the most basic aggregation, which you already know, and build up.  As you'll recall, you can aggregate using SUM().
+
+   We've aliased the sum(amount) in the target list--the list of columns in the SELECT clause--with AS.  This makes the output easier to read.
+                    </aside>
+                    Basic Aggregation
+                    <pre><code data-trim data-noescape>
+SELECT sum(amount) <mark>AS "Amount"</mark>
+FROM payment;
+</code>
+                        ┌──────────┐
+                        │  Amount  │
+                        ├──────────┤
+                        │ 67416.51 │
+                        └──────────┘
+                        (1 row)
+
+                    </pre>
+                </section>
+                <section>
+                    <aside class="notes" data-markdown>
+   Since monthly sales are customary, we'll split this up with date_trunc and
+   GROUP BY.  Sadly, date formatting is not uniform across RDBMSs.
+
+   Now that the target list is getting more complicated, we're formatting it by indenting it.
+
+   However...
+                    </aside>
+                    GROUP BY
+                    <pre><code data-trim data-noescape>
+SELECT
+    <mark>date_trunc('month', payment_date)</mark> AS "Month",
+    sum(amount) AS "Amount"
+FROM payment
+GROUP BY <mark>date_trunc('month', payment_date)</mark>;
+</code>
+                            ┌─────────────────────┬──────────┐
+                            │        Month        │  Amount  │
+                            ├─────────────────────┼──────────┤
+                            │ 2017-01-01 00:00:00 │  4824.43 │
+                            │ 2017-05-01 00:00:00 │   514.18 │
+                            │ 2017-04-01 00:00:00 │ 28559.46 │
+                            │ 2017-03-01 00:00:00 │ 23886.56 │
+                            │ 2017-02-01 00:00:00 │  9631.88 │
+                            └─────────────────────┴──────────┘
+                            (5 rows)
+
+                    </pre>
+                </section>
+                <section>
+                    <aside class="notes" data-markdown>
+   Oops!  The "Month" columns are out of order, and they look ugly.
+
+   Let's fix that.
+                    </aside>
+                    GROUP BY
+                    <pre><code data-trim data-noescape>
+SELECT
+    date_trunc('month', payment_date) AS "Month",
+    sum(amount) AS "Amount"
+FROM payment
+GROUP BY date_trunc('month', payment_date);
+</code>
+                            ┌─────────────────────┬──────────┐
+                            │        Month        │  Amount  │
+                            ├─────────────────────┼──────────┤
+                            │ 2017-01-01 00:00:00 │  4824.43 │
+                            │ <mark>2017-05-01 00:00:00</mark> │   514.18 │
+                            │ 2017-04-01 00:00:00 │ 28559.46 │
+                            │ 2017-03-01 00:00:00 │ 23886.56 │
+                            │ 2017-02-01 00:00:00 │  9631.88 │
+                            └─────────────────────┴──────────┘
+                            (5 rows)
+
+                    </pre>
+                </section>
+
+                <section>
+                    ORDER BY
+                    <aside class="notes" data-markdown>
+   That's better!
+
+   You'll note that both the GROUP BY and ORDER BY are the same clunky repeated
+   expression and not the alias we created.  Unfortunately, this is what the SQL
+   standard mandates.
+
+   Because we're interested not just in what's selling, but who sold it, let's
+   layer that in next.
+                    </aside>
+                    <pre><code data-trim data-noescape>
+SELECT
+    <mark>to_char(
+        date_trunc(</mark>'month', payment_date),
+        'Month YYYY'
+    ) AS "Month",
+    sum(amount) AS "Amount"
+FROM payment
+GROUP BY <mark>date_trunc</mark>('month', payment_date)
+ORDER BY <mark>date_trunc</mark>('month', payment_date);
+</code>
+                    ┌────────────────┬──────────┐
+                    │     Month      │  Amount  │
+                    ├────────────────┼──────────┤
+                    │ January   2017 │  4824.43 │
+                    │ February  2017 │  9631.88 │
+                    │ March     2017 │ 23886.56 │
+                    │ April     2017 │ 28559.46 │
+                    │ May       2017 │   514.18 │
+                    └────────────────┴──────────┘
+                    (5 rows)
+
+                    </pre>
+                </section>
+                <section>
+                    <aside class="notes" data-markdown>
+   We've done a few things here.  We added a JOIN to the staff table.  Next, because you name things when there are more than one of them, we added aliases to each of the tables in the FROM clause
+
+   We also added GROUP BY and ORDER BY clauses that don't look exactly like what's in the target list for "Staff".  It's nice that the database engine can just prove they're equivalent and Do The Right Thing™
+
+   This is all very nice so far, but we're looking at pieces of a puzzle with very little of the bigger picture.
+
+   One bigger picture is summarizing everything incrementally.  Fortunately, this part is very, very simple to do.  We'll change the GROUP BY clause just a teensy bit, wrapping CUBE around it.
+                    </aside>
+                    <pre><code data-trim data-noescape>
+SELECT
+    to_char(
+        date_trunc('month', payment_date),
+        'Month YYYY'
+    ) AS "Month",
+    <mark>format('%s %s', s.first_name, s.last_name)</mark> AS "Staff",
+    sum(amount) AS "Amount"
+FROM
+    payment p
+JOIN
+    staff s
+    ON (p.staff_id = s.staff_id)
+GROUP BY
+    date_trunc('month', payment_date),
+    <mark>(s.last_name, s.first_name)</mark>
+ORDER BY
+    date_trunc('month', payment_date),
+    <mark>(s.last_name, s.first_name)</mark>;
+                    </code>
+                        ┌────────────────┬──────────────┬──────────┐
+                        │     Month      │    Staff     │  Amount  │
+                        ├────────────────┼──────────────┼──────────┤
+                        │ January   2017 │ Mike Hillyer │  2621.83 │
+                        │ January   2017 │ Jon Stephens │  2202.60 │
+                        │ February  2017 │ Mike Hillyer │  4776.36 │
+                        │ February  2017 │ Jon Stephens │  4855.52 │
+                        │ March     2017 │ Mike Hillyer │ 11776.83 │
+                        │ March     2017 │ Jon Stephens │ 12109.73 │
+                        │ April     2017 │ Mike Hillyer │ 14080.36 │
+                        │ April     2017 │ Jon Stephens │ 14479.10 │
+                        │ May       2017 │ Mike Hillyer │   234.09 │
+                        │ May       2017 │ Jon Stephens │   280.09 │
+                        └────────────────┴──────────────┴──────────┘
+                        (10 rows)
+                    </pre>
+                </section>
+                <section>
+                    <pre><code data-trim data-noescape>
+SELECT
+    to_char(
+        date_trunc('month', payment_date), 'Month YYYY'
+    ) AS "Month",
+    format('%s %s', s.first_name, s.last_name) AS "Staff",
+    sum(amount) AS "Amount"
+FROM
+    payment p
+JOIN
+    staff s
+    ON (p.staff_id = s.staff_id)
+GROUP BY <mark>CUBE</mark>(
+    date_trunc('month', payment_date),
+    (s.last_name, s.first_name)
+)
+ORDER BY
+    date_trunc('month', payment_date),
+    (s.last_name, s.first_name);
+                    </code>
+                    ┌────────────────┬──────────────┬──────────┐
+                    │     Month      │    Staff     │  Amount  │
+                    ├────────────────┼──────────────┼──────────┤
+                    │ January   2017 │ Mike Hillyer │  2621.83 │
+                    │ January   2017 │ Jon Stephens │  2202.60 │
+                    │ January   2017 │              │  4824.43 │
+                    │ February  2017 │ Mike Hillyer │  4776.36 │
+                    │ February  2017 │ Jon Stephens │  4855.52 │
+                    │ February  2017 │              │  9631.88 │
+                    │ March     2017 │ Mike Hillyer │ 11776.83 │
+                    │ March     2017 │ Jon Stephens │ 12109.73 │
+                    │ March     2017 │              │ 23886.56 │
+                    │ April     2017 │ Mike Hillyer │ 14080.36 │
+                    │ April     2017 │ Jon Stephens │ 14479.10 │
+                    │ April     2017 │              │ 28559.46 │
+                    │ May       2017 │ Mike Hillyer │   234.09 │
+                    │ May       2017 │ Jon Stephens │   280.09 │
+                    │ May       2017 │              │   514.18 │
+                    │                │ Mike Hillyer │ 33489.47 │
+                    │                │ Jon Stephens │ 33927.04 │
+                    │                │              │ 67416.51 │
+                    └────────────────┴──────────────┴──────────┘
+                    (18 rows)
+                    </pre>
+                </section>
+                <section>
+                    <h3>CUBE Dissected</h3>
+                    <aside class="notes" data-markdown>
+   Here's how this worked.
+
+   You'll notice that I've replaced CUBE expression from the previous code with
+   the equivalent GROUPING SETS expression. As I mentioned earlier, GROUPING SETS is
+   shorthand for "aggregate in these permutations."  We start by aggregating the
+   permutation of all elements, and work our way down to no elements.  As you
+   can see, the GROUPING SETS notation makes it easy to decide on which
+   aggregations you want to show when you need to customize.
+
+                    </aside>
+                    <pre><code data-trim data-noescape>
+SELECT
+    to_char(
+        date_trunc('month', payment_date),
+        'Month YYYY'
+    ) AS "Month",
+    format('%s %s', s.first_name, s.last_name) AS "Staff",
+    sum(amount) AS "Amount"
+FROM
+    payment p
+JOIN
+    staff s
+    ON (p.staff_id = s.staff_id)
+GROUP BY GROUPING SETS (
+    ( date_trunc('month', payment_date),  (s.last_name, s.first_name) ),
+    ( date_trunc('month', payment_date)                               ),
+    (                                     (s.last_name, s.first_name) ),
+    (                                                                 )
+)
+ORDER BY
+    date_trunc('month', payment_date),
+    (s.last_name, s.first_name);
+
+                    </code></pre>
+                </section>
+                <section>
+                    <aside class="notes" data-markdown>
+To recap, we have:
+- Built a clear, useful report
+- Written maintainable code in SQL
+- Learned a powerful new technique, and
+- Saved ourselves a lot of time
+                    </aside>
+                    <h1>Thanks!</h1>
+                </section>
 			</div>
 		</div>
 
@@ -42,7 +340,10 @@
 					{ src: 'plugin/markdown/markdown.js' },
 					{ src: 'plugin/notes/notes.js', async: true },
 					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
-				]
+				],
+                keyboard: {
+                    82: function() { Recorder.toggleRecording(); }	// press 'r' to start/stop recording
+                }
 			});
 		</script>
 	</body>
