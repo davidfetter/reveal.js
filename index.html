@@ -27,9 +27,9 @@
 			<div class="slides">
                 <section>
                     <aside class="notes" data-markdown>
-   My name is David Fetter, and I'll be building on your knowledge of SQL aggregation.  I'll be introducing a powerful feature called GROUPING SETS by developing a report.
+   My name is David Fetter, and I'll be helping you build on your knowledge of SQL aggregation.  I'll be introducing a powerful feature called GROUPING SETS by developing a report.
 
-   GROUPING SETS is just shorthand for "do all the following aggregations."
+   GROUPING SETS is just shorthand for "do all the following aggregations and merge together the results."
 
    Higher level abstractions like GROUPING SETS make the code short and simple, which means that that the person whose code is broken and causing havoc at 3:30am won't be you.
                     </aside>
@@ -40,7 +40,7 @@
                 </section>
                 <section>
                     <aside class="notes" data-markdown>
-This is what we'll build up to, but
+This is what we'll build up to, but in the mean time,
                     </aside>
                     <pre><code data-trim data-noescape>
 SELECT
@@ -71,7 +71,7 @@ ORDER BY
                 </section>
                 <section>
                     <aside class="notes" data-markdown>
-   We'll start from the most basic aggregation, which you already know, and build up.  As you'll recall, you can aggregate using SUM().
+   We'll start from the most basic aggregation, which you already know, and build up.
 
    We've aliased the sum(amount) in the target list--the list of columns in the SELECT clause--with AS.  This makes the output easier to read.
                     </aside>
@@ -94,7 +94,8 @@ FROM payment;
    Since monthly sales are customary, we'll split this up with date_trunc and
    GROUP BY.  Sadly, date formatting is not uniform across RDBMSs.
 
-   Now that the target list is getting more complicated, we're formatting it by indenting it.
+   Now that the code in the target list is getting more complicated, we're
+   indenting it for legibility.
 
    However...
                     </aside>
@@ -282,12 +283,12 @@ ORDER BY
    Here's how this worked.
 
    You'll notice that I've replaced CUBE expression from the previous code with
-   the equivalent GROUPING SETS expression. As I mentioned earlier, GROUPING SETS is
-   shorthand for "aggregate in these permutations."  We start by aggregating the
-   permutation of all elements, and work our way down to no elements.  As you
-   can see, the GROUPING SETS notation makes it easy to decide on which
-   aggregations you want to show when you need to customize.
-
+   the equivalent GROUPING SETS expression. As I mentioned earlier, GROUPING
+   SETS is shorthand for "do all the following aggregations and merge together
+   the results."  We start by aggregating the permutation of all elements, and
+   work our way down to no elements.  As you can see, the GROUPING SETS notation
+   makes it easy to decide on which aggregations you want to show when you need
+   to customize.
                     </aside>
                     <pre><code data-trim data-noescape>
 SELECT
