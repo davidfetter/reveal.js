@@ -2,12 +2,15 @@
 <html>
 	<head>
 		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.50, user-scalable=no" />
 
-		<title>reveal.js</title>
+        <meta property="og:title" content="Auto-logging in PostgreSQL" />
+        <meta property="og:description" content="Making it easy to do what you wish you'd done" />
+        <meta name="author" content="David Fetter">
+
 
 		<link rel="stylesheet" href="css/reveal.css">
-		<link rel="stylesheet" href="css/theme/black.css">
+		<link rel="stylesheet" href="css/theme/solarized.css">
 
 		<!-- Theme used for syntax highlighting of code -->
 		<link rel="stylesheet" href="lib/css/zenburn.css">
@@ -24,8 +27,142 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+				<section>
+                    Auto-logging in PostgreSQL<br>
+                    FOSDEM PGDay 2018, February 2, 2018
+                    <img
+                        width="60%"
+                        src="https://beetchawawa.files.wordpress.com/2010/06/elephant-194.jpg"
+                        alt="Manneken Pis-themed elephant"
+                    >
+                    <aside class="notes">
+                    Hello, FOSDEM!<br>
+                    Thanks for inviting me here.  Let's get started.
+                    </aside>
+                </section>
+				<section>
+                    <h5 align="top">The Eternal Question:</h5>
+                    <h2 align="top">WHAT HAPPEN?</h2>
+                </section>
+				<section style="text-align:left;font-size:20pt">
+                        <span>What was going on with client 187666 during February of last year?</span><br/><br/>
+                        <span class="fragment">What did tables postal, email, and phone look like?</span><br/><br/>
+                        <span class="fragment">Do you remember what we set frobulizer to last week?</span><br/><br/>
+                        <span class="fragment">When did we delete that @%^# record?!?</span>
+                </section>
+				<section>
+                    <h5 align="top">Common Answer:</h5>
+                    <h2 align="top" class="fragment">Dunno!</h2>
+                </section>
+				<section>
+                    <h5 align="top">Common Reason:</h5>
+                    <h3 align="top" class="fragment">Um, how?</h3>
+                </section>
+				<section>
+                    <h5 align="top">Another Common Reason:</h5>
+                    <h3 align="top" class="fragment">Too finicky to set up!</h3>
+                </section>
+				<section>
+                    <h5 align="top">Yet Another Common Reason:</h5>
+                    <h3 align="top" class="fragment">Maintenance. Ugh.</h3>
+                </section>
+                <section>
+                    <h3 align="top">What would we like?</h3>
+                    <ul>
+                        <span class="fragment">No manual steps after setup</span><br/>
+                        <span class="fragment">Know who made the change</span><br/>
+                        <span class="fragment">...when they made it</span><br/>
+                        <span class="fragment">...down to the row and column level</span><br/>
+                        <span class="fragment">Hardened against schema changes</span><br/>
+                        <span class="fragment">Easy to query</span><br/>
+                        <span class="fragment">In other words...</span><br/>
+                        <span class="fragment">Magic!</span>
+                    </ul>
+                </section>
+                <section>
+                    <h2>Or is it?</h2>
+                </section>
+                <section>
+                    <img
+                        height="60%"
+                        src="https://www.milwaukeetool.com/-/media/Products/Hand-Tools/Storage/48-22-8010_5.ashx?mw=1032&mh=520&hash=BA8C40D461131D1255131F9AD8524DE3EAEC3B44"
+                        alt="picture of an overflowing toolbox"
+                    >
+                    <aside class="notes">
+                    Let's pull some things out of PostgreSQL's gigantic toolbox
+                    </aside>
+                </section>
+                <section>
+                    <ul>
+                        <li class="fragment">Triggers</li>
+                        <ul>
+                            <li class="fragment">Data change</li>
+                            <li class="fragment">Event</li>
+                        </ul>
+                        <li class="fragment">JSONB</li>
+                        <li class="fragment">Partitioning</li>
+                        <li class="fragment">FDW (not yet!)</li>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Logging Data Structure</h3>
+                    <ul>
+                        <li class="fragment">Who</li>
+                        <li class="fragment">When</li>
+                        <li class="fragment">Where</li>
+                        <li class="fragment">What</li>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Who</h3>
+                        DEFAULT to CURRENT_USER
+                </section>
+                <section>
+                    <h3>Where</h3>
+                        <span style="text-align:left" class="fragment">table_schema TEXT NOT NULL<br/></span>
+                        <span style="text-align:left" class="fragment">table_name TEXT NOT NULL</span>
+                </section>
+                <section>
+                    <h3>When</h3>
+                    <span class="fragment">timestamp TIMESTAMP</span><span
+                    class="fragment"> WITH TIME ZONE</span><span class="fragment">!!!</span>
+                </section>
+                <section>
+                    <h3>What</h3>
+                    <ul>
+                        <li class="fragment">old_row <span class="fragment">(if applicable)</span></li>
+                        <li class="fragment">new_row <span class="fragment">(if applicable)</span></li>
+                        <li class="fragment">serialized as JSONB</li>
+                        <ul>
+                            <li class="fragment">Impervious to DDL</li>
+                            <li class="fragment">Good query tools</li>
+                            <li class="fragment">Index friendly</li>
+                        </ul>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Top-level table</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+                        ```sql
+                        CREATE TABLE IF NOT EXISTS the_log (
+                            "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+                            "user" text NOT NULL DEFAULT CURRENT_USER,
+                            action text NOT NULL,
+                            table_schema text NOT NULL,
+                            table_name text NOT NULL,
+                            old_row jsonb,
+                            new_row jsonb,
+                            CONSTRAINT the_log_check CHECK (
+                                CASE action
+                                    WHEN 'INSERT' THEN old_row IS NULL
+                                    WHEN 'DELETE' THEN new_row IS NULL
+                                END
+                            )
+                        ) PARTITION BY LIST(table_schema);
+                        ```
+                        </textarea>
+                    </section>
 			</div>
 		</div>
 
@@ -45,5 +182,41 @@
 				]
 			});
 		</script>
+    <style type="text/css">
+        /* 1. Style header/footer <div> so they are positioned as desired. */
+        #footer-left {
+            position: absolute;
+            bottom: 5%;
+            left: 5%;
+            font-size: 50%;
+        }
+    </style>
+
+    <!-- 2. Create hidden header/footer <div> -->
+    <div id="hidden" style="display:none;">
+        <div id="header">
+            <div id="header-left"></div>
+            <div id="header-right"></div>
+            <div id="footer-left">
+                David Fetter<br/>
+                February 2, 2018<br/>
+                <a href=mailto:david@fetter.org>david@fetter.org</a></div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script type="text/javascript">
+        // 3. On Reveal.js ready event, copy header/footer <div> into each `.slide-background` <div>
+        var header = $('#header').html();
+        if ( window.location.search.match( /print-pdf/gi ) ) {
+            Reveal.addEventListener( 'ready', function( event ) {
+                $('.slide-background').append(header);
+            });
+        }
+        else {
+            $('div.reveal').append(header);
+       }
+    </script>
+
 	</body>
 </html>
