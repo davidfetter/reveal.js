@@ -94,14 +94,13 @@
                 </section>
                 <section>
                     <ul>
-                        <li class="fragment">Triggers</li>
+                        <li>Triggers</li>
                         <ul>
-                            <li class="fragment">Data change</li>
+                            <li class="fragment">Data changes per statement (New in 10!)</li>
                             <li class="fragment">Event</li>
                         </ul>
                         <li class="fragment">JSONB</li>
                         <li class="fragment">Partitioning</li>
-                        <li class="fragment">FDW (not yet!)</li>
                     </ul>
                 </section>
                 <section>
@@ -141,7 +140,7 @@
                     </ul>
                 </section>
                 <section>
-                    <h3>Top-level table</h3>
+                    <h3>Root (db) table</h3>
                     <section data-markdown>
                         <textarea data-template>
                         ```sql
@@ -160,12 +159,239 @@
                                 END
                             )
                         ) PARTITION BY LIST(table_schema);
+
+                        CREATE INDEX ON the_log("timestamp"); /* PostgreSQL 11 feature */
                         ```
                         </textarea>
                     </section>
+                </section>
+                <section>
+                    <h3>Branch (schema) table</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+                        ```sql
+                        CREATE TABLE IF NOT EXISTS public_log PARTITION OF the_log
+                        FOR VALUES IN ('public')
+                        PARTITION BY LIST (table_name);
+                        ```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h3>Leaf (Table) table</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+                        ```sql
+                        CREATE TABLE IF NOT EXISTS public_foo_log PARTITION OF public_log
+                        FOR VALUES IN ('foo');
+                        ```
+                        </textarea>
+                    </section>
+                </section>
+                <section style="text-align:left">
+                    <h3>How do we get stuff in there?</h3>
+                    <span class="fragment">Per-statement triggers<br/></span>
+                    <span class="fragment">INSERT<br/></span>
+                    <span class="fragment">UPDATE<br/></span>
+                    <span class="fragment">DELETE</span>
+                </section>
+                <section style="text-align:left">
+                    <h3>INSERT trigger</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+CREATE TRIGGER log_insert_public_foo
+AFTER INSERT ON foo
+REFERENCING NEW TABLE AS new_table
+FOR EACH STATEMENT
+EXECUTE PROCEDURE log();
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section style="text-align:left">
+                    <h3>DELETE trigger</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+CREATE TRIGGER log_delete_public_foo
+AFTER DELETE ON foo
+REFERENCING OLD TABLE AS old_table
+FOR EACH STATEMENT
+EXECUTE PROCEDURE log();
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section style="text-align:left">
+                    <h3>UPDATE trigger (slightly wierd-looking)</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+CREATE TRIGGER log_update_public_foo
+AFTER UPDATE ON foo
+REFERENCING OLD TABLE AS old_table NEW TABLE AS new_table
+FOR EACH STATEMENT
+EXECUTE PROCEDURE log();
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h3>INSERT trigger body</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+INSERT INTO the_log (
+    action, table_schema,    table_name, new_row
+)
+SELECT
+    TG_OP,  TG_TABLE_SCHEMA, TG_RELNAME, row_to_json(new_table)::jsonb
+FROM
+    new_table;
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h3>DELETE trigger body</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+INSERT INTO the_log (
+    action, table_schema,    table_name, old_row
+)
+SELECT
+    TG_OP,  TG_TABLE_SCHEMA, TG_RELNAME, row_to_json(old_table)::jsonb
+FROM
+    old_table;
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h3>UPDATE trigger body</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+INSERT INTO the_log (
+    action, table_schema,    table_name, old_row, new_row
+)
+SELECT
+    TG_OP,  TG_TABLE_SCHEMA, TG_RELNAME, old_row, new_row
+FROM
+    UNNEST(
+        ARRAY(SELECT row_to_json(old_table)::jsonb FROM old_table),
+        ARRAY(SELECT row_to_json(new_table)::jsonb FROM new_table)
+    ) AS t(old_row, new_row)
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+/*
+ * DANGER, WILL ROBINSON!  DANGER!
+ * This implementation assumes based on
+ * current implementation details.
+ * The old_table and new_table have identical
+ * orderings.  Should that implementation detail
+ * change, this will get a lot more complicated.
+ */
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h3>That was tedious and error-prone</h3>
+                </section>
+                <section>
+                    <h5>What do we do when we see tedious and error-prone?</h5>
+                </section>
+                <section>
+                    <h1>Automate!</h1>
+                </section>
+                <section>
+                    <h3>Event trigger</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+CREATE EVENT TRIGGER add_logger
+    ON ddl_command_end
+    WHEN tag IN ('create table')
+        EXECUTE PROCEDURE add_logger();
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h3>Event trigger function</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+CREATE OR REPLACE FUNCTION add_logger()
+RETURNS event_trigger
+SECURITY DEFINER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    r RECORD;
+BEGIN
+
+    SELECT p.*, c.relname as table_name INTO STRICT r
+    FROM
+        pg_catalog.pg_event_trigger_ddl_commands() p
+...
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h3>Function that adds the DDL</h3>
+                    <section data-markdown>
+                        <textarea data-template>
+```sql
+CREATE OR REPLACE FUNCTION add_logging_items(
+    schema_name TEXT,
+    table_name TEXT
+)
+RETURNS VOID
+SECURITY DEFINER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+/* Do tedious and error-prone stuff idempotently */
+END;
+$$;
+```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h3>It's available now</h3>
+                    <a href="https://github.com/davidfetter/changelog_trigger">changelog_trigger</a>
+                </section>
+                <section>
+                    <h3>Future Improvements</h3>
+                    <span class="fragment">Separate TP from Analytics</span>
+                    <span class="fragment">with FDWs.</span>
+                    <br/>
+                    <span class="fragment">Less code/data on pub</span>
+                    <span class="fragment">with logical decoding.</span>
+                    <br/>
+                    <span class="fragment">Stuff I haven't Thought Of</span>
+                    <span class="fragment">with your help!</span>
+                </section>
+                <section>
+                    <span class="fragment current-visible">Thanks!</span>
+                    <span class="fragment current-visible">Merci!</span>
+                    <span class="fragment current-visible">Dank u wel!</span>
+                    <span class="fragment">Rate me!</span>
+                </section>
 			</div>
 		</div>
-
 		<script src="lib/js/head.min.js"></script>
 		<script src="js/reveal.js"></script>
 
