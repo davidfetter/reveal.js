@@ -3,21 +3,247 @@
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+		<meta property="og:title" content="Fun with FDW" />
+		<meta property="og:description" content="Carpe Datum" />
 
-		<title>reveal.js</title>
+		<title>Fun with FDW</title>
 
 		<link rel="stylesheet" href="dist/reset.css">
 		<link rel="stylesheet" href="dist/reveal.css">
-		<link rel="stylesheet" href="dist/theme/black.css">
+		<link rel="stylesheet" href="dist/theme/solarized.css">
 
 		<!-- Theme used for syntax highlighted code -->
-		<link rel="stylesheet" href="plugin/highlight/monokai.css">
+		<link rel="stylesheet" href="plugin/highlight/zenburn.css">
 	</head>
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+				<section>
+                    Good evening, Chicago!
+                    <img
+                        src="./Flag_of_Chicago.svg"
+                        alt="By cs:User:-xfi- - according to en:User:John Reid&#039;s (or T. E.  Whalen&#039;s) construction sheet (en:Talk:Municipal Flag of Chicago), Public Domain, https://commons.wikimedia.org/w/index.php?curid=516184"/>
+                    <aside class="notes">I'm originally from Milwaukee, which a
+                        guy who'd recently moved there from the East Coast once
+                        referred to as a suburb of your wonderful city. Needless to say,
+                    this somewhat accurate idea did not make him
+                    popular.</aside>
+
+				</section>
+				<section>
+                    <h3>Fun with FDW</h3>
+                </section>
+                <section>
+                    <h4>PostgreSQL Weekly News</h4>
+                    <aside class="notes">Among other things, I write the
+                        PWN each week. Because a lot is happening, even during
+                        "slow" weeks, I decided I'd include the patches
+                        committed since the previous newsletter came out.<br/><br/>
+
+                        At first, I did this manually based on the committers
+                        mailing list. I guess I'm stubborn because I did that
+                        for more years than I care to admit. Despite my best
+                        efforts, a lot of mistakes crept in, and as patches got
+                        more frequent, I was spending more and more time on just
+                        that section.<br/><br/>
+
+                        Then came Franck Verrot, the author of a git FDW. There
+                        may be others, but that's the one I know about.
+                    </aside>
+                </section>
+                <section>
+                    <h1>Holy Cheat!</h1>
+                </section>
+                <section>
+                    <h3>Warning: Code ahead</h3>
+                    <h5>some might even be in C</h5>
+                </section>
+                <section>
+                    <h4>Let's see...</h4>
+                    <section data-markdown>
+                        <textarea data-template>
+                        ```sh
+                        git clone git@github.com:franckverrot/git_fdw.git
+                        cd git_fdw
+                        make && make install
+                        ```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <section data-markdown>
+                        <textarea data-template>
+                        ```sql
+                        CREATE EXTENSION IF NOT EXISTS git_fdw;
+                        CREATE SCHEMA IF NOT EXISTS git;
+                        CREATE SERVER IF NOT EXISTS git_fdw_server
+                            FOREIGN DATA WRAPPER git_fdw;
+                        CREATE SCHEMA IF NOT EXISTS master;
+                        IMPORT FOREIGN SCHEMA git_data
+                            FROM SERVER git_fdw_server
+                            INTO master
+                            OPTIONS (
+                                path   '/home/shackle/pggit/postgresql',
+                                branch 'refs/heads/master',
+                                prefix 'master_'
+                            );
+                        ```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <section data-markdown>
+                        <textarea data-template>
+                        ```sql
+                        SELECT
+                            name,
+                            message,
+                            commit_date
+                        FROM
+                            master.master_repository
+                        WHERE
+                            commit_date > CURRENT_TIMESTAMP - INTERVAL '1 week'
+                        ```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <h1>WOW!!!</h1>
+                    <aside class="notes">Hours reading emails turned into just a
+                        few minutes for this query.</aside>
+                </section>
+                <section>
+                    Now that we've <em>medias</em>ed some <em>res</em>, we can
+                    have a little look at how this happened.
+                </section>
+                <section>
+                    1970
+                </section>
+                <section>
+                    <span class="fragment">A Relational Model of Shared Data Banks</span><br/>
+                    <span class="fragment">E.F. (Ted) Codd</span><br/>
+                </section>
+                <section>
+                    People got to work.
+                </section>
+                <section>
+                    <span class="fragment">By the mid-1970s </span><br/>
+                    <span class="fragment">people were making</span><br/>
+                    <span class="fragment">regrettable fashion choices</span><br/>
+                    <span class="fragment">and the first relational databases.</span>
+                </section>
+                <section>
+                    Illustra
+                </section>
+                <section>
+                    Virtual Table Interface
+                </section>
+                <section>
+                    Many years pass
+                </section>
+                <section>
+                    SQL:2003
+                </section>
+                <section>
+                    SQL/MED
+                </section>
+                <section>
+                    Evolution in PostgreSQL
+                </section>
+                <section>
+                    dblink (2004)
+                    <aside class="notes">Joe Conway did a bang-up job here!</aside>
+                </section>
+                <section>
+                    DBI-Link (also 2004)
+                    <aside class="notes">chat about Perl, Proc::ProcessTable, DBI, PL/PerlU, Wall street, and features born too early.</aside>
+                </section>
+                <section>
+                    More years pass...
+                </section>
+                <section>
+                    PostgreSQL 8.4 (Infrastructure only)
+                </section>
+                <section>
+                    PostgreSQL 9.0 (MOAR Infrastructurez)
+                </section>
+                <section>
+                    PostgreSQL 9.2 (Reads)
+                </section>
+                <section>
+                    PostgreSQL 9.3 (Writes)
+                </section>
+                <section>
+                    Proliferation!
+                </section>
+                <section>
+                    PostgreSQL Weekly News
+                    <aside class="notes">It started taking longer and longer to
+                        get those week's worth of updates, so I dove in to see
+                        what the heck was going on. What you're about to see is what I
+                        did about it</aside>
+                </section>
+                    <section data-markdown>
+                        <textarea data-template>
+                        ```diff
+                        commit 3985044a68e73cf024052094782bef93386b3856 (HEAD -> no_diffs, origin/no_diffs)
+                        Author: David Fetter <david@fetter.org>
+                        Date:   Mon Jul 29 23:12:49 2019 -0700
+
+                            Crudely remove diffs
+
+                        diff --git git_fdw.c git_fdw.c
+                        index 11373c4..4f3a5f1 100644
+                        --- git_fdw.c
+                        +++ git_fdw.c
+                        @@ -502,12 +502,14 @@ static TupleTableSlot *gitIterateForeignScan(ForeignScanState *node)
+
+                           git_oid oid;
+                           git_commit *commit;
+                        +  /*
+                           git_tree *commit_tree;
+                           git_commit *commit_parent;
+                           git_tree *commit_parent_tree;
+                           git_diff *commit_diff;
+                           git_diff_stats *commit_diff_stats;
+                           bool commit_parent_needs_free = false;
+                        +  */
+                           int position;
+
+                           /* libgit's output */
+                        @@ -535,14 +537,15 @@ static TupleTableSlot *gitIterateForeignScan(ForeignScanState *node)
+                             commit_author = git_commit_committer(commit);
+                             commit_sha1 = git_commit_id(commit);
+
+                        -    if (git_commit_parent(&commit_parent, commit, 0) == GIT_OK)
+                        +    /*
+                        +   if (git_commit_parent(&commit_parent, commit, 0) == GIT_OK)
+                             {
+                               commit_parent_needs_free = true;
+                               git_commit_tree(&commit_parent_tree, commit_parent);
+                             }
+                             else
+                             {
+                        -      /* Get diff of the first commit. */
+                        +      // Get diff of the first commit.
+                               git_oid oid_tree_empty;
+
+                               if (git_oid_fromstr(&oid_tree_empty, EMPTY_REPO_SHA1) == GIT_OK)
+                        @@ -569,6 +572,7 @@ static TupleTableSlot *gitIterateForeignScan(ForeignScanState *node)
+                             }
+                             git_tree_free(commit_tree);
+                             git_tree_free(commit_parent_tree);
+                        +     */
+                        ```
+                        </textarea>
+                    </section>
+                </section>
+                <section>
+                    <span class="fragment">Comments</span><span class="fragment">, and comments phrased as questions ;)</span>
+                </section>
+                <section>
+                    <h1>Thank you!</h1>
+                </section>
 			</div>
 		</div>
 
@@ -36,5 +262,50 @@
 				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
 			});
 		</script>
+        <style type="text/css">
+            /* 1. Style header/footer <div> so they are positioned as desired. */
+            #footer-left {
+                position: absolute;
+                bottom: 5%;
+                left: 5%;
+                font-size: 50%;
+            }
+            #footer-right {
+                position: absolute;
+                bottom: 5%;
+                right: 15%;
+            }
+            ul {
+                list-style-type: none;
+            }
+        </style>
+
+        <!-- 2. Create hidden header/footer <div> -->
+        <div id="hidden" style="display:none;">
+            <div id="header">
+                <div id="header-left"></div>
+                <div id="header-right"></div>
+                <div id="footer-left">
+                    David Fetter<br/>
+                    Chicago PUG<br/>
+                    July 13, 2021<br/>
+                    <a href=mailto:david@fetter.org>david@fetter.org</a></div>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+        <script type="text/javascript">
+            // 3. On Reveal.js ready event, copy header/footer <div> into each `.slide-background` <div>
+            var header = $('#header').html();
+            if ( window.location.search.match( /print-pdf/gi ) ) {
+                Reveal.addEventListener( 'ready', function( event ) {
+                    $('.slide-background').append(header);
+                });
+            }
+            else {
+                $('div.reveal').append(header);
+           }
+        </script>
 	</body>
 </html>
